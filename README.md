@@ -1,0 +1,2 @@
+# story
+localStorage handler
