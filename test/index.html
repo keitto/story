@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Test for story.js</title>
+    <style>
+        body {
+            background-color:#888;
+        }
+        .but { 
+            padding: .5rem; 
+            border-radius: .5rem; 
+            border: 1px solid #fff; 
+            background: #333; 
+            color: #fff;
+            cursor: pointer; 
+        }
+        li {
+            list-style: none;
+        }
+        ul {
+            padding: 0;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test for story.js</h1>
+    <div>
+        <button class="but" id="addRow" title="Add a new row">Add row</button>
+        <button class="but" id="clearAll" title="Clear all rows">Clear</button>
+        <button class="but" id="exportBtn" title="Export JSON">Export</button>
+        <label class="but import" title="Import JSON">
+            Import
+            <input id="importInput" type="file" accept="application/json" style="display:none">
+        </label>
+    </div>
+
+    <div id="status">–</div>
+    <ul id="list"></ul>
+
+    <script type="module">
+        import { getStory } from "../story.js";
+        const myKey = "test";
+
+        const storage = getStory({
+            key: myKey,
+        });
+
+        let state = storage.load(() => ({ lines: [] }));
+        const listEl = document.getElementById("list");
+        const statusEl = document.getElementById("status");
+
+        function setStatus(text) { statusEl.textContent = text; }
+
+        function saveNow() {
+        state = storage.save(state);
+        setStatus(`Saved: ${new Date(state.updatedAt).toLocaleString()}`);
+        }
+
+        function render() {
+            listEl.innerHTML = "";
+            if (!Array.isArray(state.lines)) state.lines = [];
+            state.lines.forEach((txt, idx) => {
+                const li = document.createElement("li");
+
+                const input = document.createElement("input");
+                input.type = "text";
+                input.value = txt ?? "";
+                input.placeholder = `Row ${idx + 1}`;
+                input.addEventListener("input", () => {
+                    state.lines[idx] = input.value;
+                    saveNow(); // tallennus jokaisesta syötöstä
+                });
+
+                const del = document.createElement("button");
+                del.textContent = "✕";
+                del.title = "Delete row";
+                del.addEventListener("click", () => {
+                    state.lines.splice(idx, 1);
+                    saveNow();
+                    render();
+                });
+
+                li.append(input, del);
+                listEl.appendChild(li);
+            });//foreach
+
+            if (state.lines.length === 0) {
+                const li = document.createElement("li");
+                li.textContent = "No rows yet. Add more.";
+                listEl.appendChild(li);
+            }
+        }
+
+        document.getElementById("addRow").addEventListener("click", () => {
+        state.lines.push("");
+        saveNow();
+        render();
+
+        const inputs = listEl.querySelectorAll('input[type="text"]');
+            if (inputs.length) inputs[inputs.length - 1].focus();
+        });
+
+        document.getElementById("clearAll").addEventListener("click", () => {
+            if (!confirm("Clear all rows?")) return;
+            state.lines = [];
+            saveNow();
+            render();
+        });
+
+        document.getElementById("exportBtn").addEventListener("click", () => {
+            storage.exportState("story-test-state.json", state);
+        });
+
+        document.getElementById("importInput").addEventListener("change", async (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            try {
+                const text = await file.text();
+                const obj = JSON.parse(text);
+                state = storage.importStateObject(obj);
+                render();
+            } catch (err) {
+                alert("Failed to load import.");
+                console.error(err);
+            } finally {
+                e.target.value = "";
+            }
+        });
+
+        storage.onExternalChange((newState) => {
+            try {
+                state = newState;
+                render();
+                setStatus(`Updated from external change: ${new Date().toLocaleString()}`);
+            } catch {}
+        });
+
+        render();
+        if (state.updatedAt) {
+            setStatus(`Saved: ${new Date(state.updatedAt).toLocaleString()}`);
+        } else {
+            setStatus(`Nothing saved with key "${myKey}" yet.`);
+        }
+    </script>
+</body>
+</html>
